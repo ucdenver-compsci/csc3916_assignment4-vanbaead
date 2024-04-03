@@ -13,6 +13,7 @@ var jwt = require('jsonwebtoken');
 var cors = require('cors');
 var User = require('./Users');
 var Movie = require('./Movies');
+var Review = require('./Reviews');
 
 var app = express();
 app.use(cors());
@@ -183,7 +184,43 @@ router.route('/movies/:title')
         // Returns a message stating that the HTTP method is unsupported.
         res.status(405).send({ message: 'HTTP method not supported.' });
     });
-    
+
+router.route('/reviews')
+    .get((req,res) => {
+        Review.find()
+            .then(Reviews => {
+                res.json(Reviews);
+            })
+            .catch(err => {
+                console.error('Error fetching reviews:', err);
+                res.status(500).json({ error: 'Internal server error' });
+            });
+    })
+    .post(authJwtController.isAuthenticated, (req, res) => {
+        const { movieId, username, review, rating } = req.body;
+        
+        const newReview = new Review({
+            movieId,
+            username,
+            review,
+            rating
+        });
+
+        newReview.save()
+        .then(() => {
+            res.json({ message: 'Review Created!' })
+        })
+        .catch(err => {
+            console.error('Error creating review:', err);
+            res.status(500).json({ error: 'Internal server error' });
+        });
+    })
+    .all((req, res) => {
+        // Any other HTTP Method
+        // Returns a message stating that the HTTP method is unsupported.
+        res.status(405).send({ message: 'HTTP method not supported.' });
+    });
+
 
 app.use('/', router);
 app.listen(process.env.PORT || 8080);
