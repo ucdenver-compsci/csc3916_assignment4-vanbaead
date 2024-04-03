@@ -1,5 +1,5 @@
 /*
-CSC3916 HW4
+CSC3916 HW2
 File: Server.js
 Description: Web API scaffolding for Movie API
  */
@@ -13,7 +13,6 @@ var jwt = require('jsonwebtoken');
 var cors = require('cors');
 var User = require('./Users');
 var Movie = require('./Movies');
-var Review = require('./Reviews');
 
 var app = express();
 app.use(cors());
@@ -86,6 +85,105 @@ router.post('/signin', function (req, res) {
         })
     })
 });
+
+router.route('/movies')
+    .get(authJwtController.isAuthenticated, (req, res) => {
+        //Fetch all movies from the database
+        Movie.find()
+            .then(movies => {
+                res.json(movies);
+            })
+            .catch(err => {
+                console.error('Error fetching movies:', err);
+                res.status(500).json({ error: 'Internal server error' });
+            });
+    })
+    //Route to create a new movie or return all movies
+    .post(authJwtController.isAuthenticated, (req, res) => {
+        //Extract movie data from the request body
+        const { title, releaseDate, genre, actors } = req.body;
+
+        //Create a new movie document
+        const newMovie = new Movie({
+            title,
+            releaseDate,
+            genre,
+            actors
+        });
+
+        //Save the new movie to the database
+        newMovie.save()
+            .then(() => {
+                //After saving the new movie, fetch all movies from the database
+                return Movie.find();
+            })
+            .then(movies => {
+                res.json(movies); //Respond with all movies
+            })
+            .catch(err => {
+                console.error('Error creating movie:', err);
+                res.status(500).json({ error: 'Internal server error' });
+            });
+    })
+    .all((req, res) => {
+        // Any other HTTP Method
+        // Returns a message stating that the HTTP method is unsupported.
+        res.status(405).send({ message: 'HTTP method not supported.' });
+    });
+
+router.route('/movies/:title')
+    .get(authJwtController.isAuthenticated, (req, res) => {
+        const title = req.params.title;
+
+        Movie.findOne({ title })
+            .then(movie => {
+                if (!movie) {
+                    return res.status(404).json({ error: 'Movie not found' });
+                }
+                res.json(movie);
+            })
+            .catch(err => {
+                console.error('Error fetching movie:', err);
+                res.status(500).json({ error: 'Internal server error' });
+            });
+    })
+    .put(authJwtController.isAuthenticated, (req, res) => {
+        const title = req.params.title;
+        const { releaseDate, genre, actors } = req.body;
+    
+        Movie.findOneAndUpdate({ title }, { releaseDate, genre, actors }, { new: true })
+            .then(movie => {
+                if (!movie) {
+                    return res.status(404).json({ error: 'Movie not found' });
+                }
+                res.json(movie);
+            })
+            .catch(err => {
+                console.error('Error updating movie:', err);
+                res.status(500).json({ error: 'Internal server error' });
+            });
+    })
+    .delete(authJwtController.isAuthenticated, (req, res) => {
+        const title = req.params.title;
+    
+        Movie.findOneAndDelete({ title })
+            .then(movie => {
+                if (!movie) {
+                    return res.status(404).json({ error: 'Movie not found' });
+                }
+                res.json({ message: 'Movie deleted successfully' });
+            })
+            .catch(err => {
+                console.error('Error deleting movie:', err);
+                res.status(500).json({ error: 'Internal server error' });
+            });
+    })
+    .all((req, res) => {
+        // Any other HTTP Method
+        // Returns a message stating that the HTTP method is unsupported.
+        res.status(405).send({ message: 'HTTP method not supported.' });
+    });
+    
 
 app.use('/', router);
 app.listen(process.env.PORT || 8080);
