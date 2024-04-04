@@ -89,15 +89,38 @@ router.post('/signin', function (req, res) {
 
 router.route('/movies')
     .get(authJwtController.isAuthenticated, (req, res) => {
-        //Fetch all movies from the database
-        Movie.find()
-            .then(movies => {
-                res.json(movies);
+        const { reviews } = req.query;
+
+        if (reviews === 'true') {
+            Movie.aggregate([
+                {
+                    $lookup: {
+                        from: 'reviews',
+                        localField: '_id',
+                        foreignField: 'movieId',
+                        as: 'reviews'
+                    }
+                }
+            ])
+            .then(moviesWithReviews => {
+                res.json(moviesWithReviews);
             })
             .catch(err => {
-                console.error('Error fetching movies:', err);
+                console.error('Error aggregating reviews and movies:', err);
                 res.status(500).json({ error: 'Internal server error' });
-            });
+            })
+        }
+        else{
+            //Fetch all movies from the database
+            Movie.find()
+                .then(movies => {
+                    res.json(movies);
+                })
+                .catch(err => {
+                    console.error('Error fetching movies:', err);
+                    res.status(500).json({ error: 'Internal server error' });
+                });
+        }
     })
     //Route to create a new movie or return all movies
     .post(authJwtController.isAuthenticated, (req, res) => {
@@ -135,18 +158,48 @@ router.route('/movies')
 router.route('/movies/:title')
     .get(authJwtController.isAuthenticated, (req, res) => {
         const title = req.params.title;
+        const { reviews } = req.query;
 
-        Movie.findOne({ title })
-            .then(movie => {
-                if (!movie) {
+        if (reviews === 'true') {
+            Movie.aggregate([
+                {
+                    $match: { title }
+                },
+                {
+                    $lookup: {
+                        from: 'reviews',
+                        localField: '_id',
+                        foreignField: 'movieId',
+                        as: 'reviews'
+                    }
+                }
+            ])
+            .then(movieWithReview => {
+                if (movieWithReview.length === 0) {
                     return res.status(404).json({ error: 'Movie not found' });
                 }
-                res.json(movie);
+                else {
+                    res.json(movieWithReview);
+                }
             })
             .catch(err => {
-                console.error('Error fetching movie:', err);
+                console.error('Error aggregating reviews and movies:', err);
                 res.status(500).json({ error: 'Internal server error' });
-            });
+            })
+        }
+        else {
+            Movie.findOne({ title })
+                .then(movie => {
+                    if (!movie) {
+                        return res.status(404).json({ error: 'Movie not found' });
+                    }
+                    res.json(movie);
+                })
+                .catch(err => {
+                    console.error('Error fetching movie:', err);
+                    res.status(500).json({ error: 'Internal server error' });
+                });
+        }
     })
     .put(authJwtController.isAuthenticated, (req, res) => {
         const title = req.params.title;
@@ -198,22 +251,29 @@ router.route('/reviews')
     })
     .post(authJwtController.isAuthenticated, (req, res) => {
         const { movieId, username, review, rating } = req.body;
+        Movie.findById(movieId)
+        .then(movie => {
+            if (!movie) {
+                return res.status(404).json({ error: 'Movie not found' })
+            }
+            else{
+                const newReview = new Review({
+                    movieId,
+                    username,
+                    review,
+                    rating
+                });
         
-        const newReview = new Review({
-            movieId,
-            username,
-            review,
-            rating
-        });
-
-        newReview.save()
-        .then(() => {
-            res.json({ message: 'Review Created!' })
+                newReview.save()
+                .then(() => {
+                    res.json({ message: 'Review Created!' })
+                })
+                .catch(err => {
+                    console.error('Error creating review:', err);
+                    res.status(500).json({ error: 'Internal server error' });
+                });
+            }
         })
-        .catch(err => {
-            console.error('Error creating review:', err);
-            res.status(500).json({ error: 'Internal server error' });
-        });
     })
     .all((req, res) => {
         // Any other HTTP Method
